@@ -40,7 +40,7 @@ def affichage_kppv(liste_donnees_classes, point_a_classer, K, decision):
     plot(point_a_classer[0], point_a_classer[1], stylepoint)
 
     # Affichage des segments sur les K points les plus proches
-    k_points = closer_points(liste_donnees_classes, point_a_classer, K)
+    k_points = nearest_points(liste_donnees_classes, point_a_classer, K)
     for i in range(len(k_points)):
         plot([k_points[i]['Coord'][0], point_a_classer[0]], [k_points[i]['Coord'][1], point_a_classer[1]],
              couleurs[k_points[i]['Class']])
@@ -49,11 +49,12 @@ def affichage_kppv(liste_donnees_classes, point_a_classer, K, decision):
     hold(False)
 
 
-def closer_points(liste_points_classes, point_a_classer, K):
+# retourne les K points les plus proches du point à classer, leur distance, leur class et leur coordonnées
+def nearest_points(liste_points_classes, point_a_classer, K):
     nb_classes = len(liste_points_classes)
     nb_points_representatifs = len(liste_points_classes[0])
 
-    distances = []
+    distances = []  # tableau contenant toutes les distance des points des différentes classes par rapport au point à classer
     for c in range(nb_classes):
         for pt in range(nb_points_representatifs):
             distances.append({'Dist': distance.euclidean(point_a_classer, liste_points_classes[c][pt]), 'Class': c,
@@ -65,26 +66,33 @@ def closer_points(liste_points_classes, point_a_classer, K):
     return sorted_dist[0:K]
 
 
-def get_class_tab(sorted_dist, K):
-    res = [0] * K
-    for i in range(K):
+# retourne un tableau contenant nombre d’occurences des classes assocíees aux K plus petites distances
+def get_class_tab(sorted_dist):
+    # Entrée :
+    # - sorted_dist : list de dict (Dist, Class, Coord) des K plus proches points
+
+    k = len(sorted_dist)
+    res = [0] * k
+    for i in range(k):
         res[int(sorted_dist[i]['Class'])] += 1
 
     return res
 
 
+# Cette politique consiste à incrémenter K tant que l'on ne peut pas décider
 def heuristique_increase_k(liste_points_classes, point_a_classer, K):
     eg = True
     res = []
     while eg:
         K += 1
-        sorted_dist = closer_points(liste_points_classes, point_a_classer, K)
-        res = get_class_tab(sorted_dist, K)
+        sorted_dist = nearest_points(liste_points_classes, point_a_classer, K)
+        res = get_class_tab(sorted_dist)
         eg = egalite(res)
 
     return argmax(res) + 1
 
 
+# Cette politique consiste à ne pas décider
 def heuristique_no_decision(liste_points_classes, point_a_classer, K):
     return None
 
@@ -101,10 +109,10 @@ def decision_kppv(liste_points_classes, point_a_classer, K, politique):
     # Sortie :
     # - numero de la classe la plus proche (0 si pas de décision)
 
-    sorted_dist = closer_points(liste_points_classes, point_a_classer, K)
+    sorted_dist = nearest_points(liste_points_classes, point_a_classer, K)
 
     # décision sur les classes
-    res = get_class_tab(sorted_dist, K)
+    res = get_class_tab(sorted_dist)
 
     # Si on a égalité on ne prend pas de décision
     # Si on a égalité on augmenté K jusqu'a avoir une décision
