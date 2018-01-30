@@ -10,13 +10,16 @@ from matplotlib.colors import ListedColormap
 from sklearn import neighbors
 
 
-def affichage_kppv(liste_donnees_classes, point_a_classer, K, voisins, decision):
+def affichage_kppv(liste_donnees_classes, point_a_classer, K, voisins, decision, display_border=True):
     assert type(liste_donnees_classes) is list
 
     nb_classes = len(liste_donnees_classes)
     couleurs = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w']
     formespoints = ['x', 'o', 'v', '^', '<', '>', '1', '2', '3', '4', 's', 'p', 'h', 'H', '+', '.', 'D', 'd', ',']
     cmap_light = ListedColormap(['#90CAF9', '#C5E1A5', '#EF9A9A']) # , '#80DEEA', '#CE93D8', '#FFF59D', '#B0BEC5', '#FFFFFF'
+
+    figure(facecolor="white")
+
 
     hold(True)
     x_ptnss = []
@@ -44,18 +47,19 @@ def affichage_kppv(liste_donnees_classes, point_a_classer, K, voisins, decision)
     plot(point_a_classer[0], point_a_classer[1], stylepoint)
 
     # Calcul et affichage de la frontière de décision
-    x_min, x_max = min(x_ptnss) - 1, max(x_ptnss) + 1
-    y_min, y_max = min(y_ptnss) - 1, max(y_ptnss) + 1
+    if display_border:
+        x_min, x_max = min(x_ptnss) - 1, max(x_ptnss) + 1
+        y_min, y_max = min(y_ptnss) - 1, max(y_ptnss) + 1
 
-    h = 0.02  # taille de pas dans le maillage
-    xx, yy = meshgrid(arange(x_min, x_max, h), arange(y_min, y_max, h))
+        h = 0.02  # taille de pas dans le maillage
+        xx, yy = meshgrid(arange(x_min, x_max, h), arange(y_min, y_max, h))
 
-    clf = neighbors.KNeighborsClassifier(n_neighbors=K)
-    clf.fit(ptnss, c)
-    Z = clf.predict(c_[xx.ravel(), yy.ravel()])
+        clf = neighbors.KNeighborsClassifier(n_neighbors=K)
+        clf.fit(ptnss, c)
+        Z = clf.predict(c_[xx.ravel(), yy.ravel()])
 
-    Z = Z.reshape(xx.shape)
-    pcolormesh(xx, yy, Z, cmap=cmap_light)
+        Z = Z.reshape(xx.shape)
+        pcolormesh(xx, yy, Z, cmap=cmap_light)
 
     show()
     hold(False)
@@ -109,6 +113,34 @@ def heuristique_increase_k(liste_points_classes, point_a_classer, K):
         eg = egalite(res)
 
     return (argmax(res) + 1), K, sorted_dist
+
+
+def heuristique_mean(liste_points_classes, point_a_classer, K):
+    nb_classes = len(liste_points_classes)
+    sorted_dist = nearest_points(liste_points_classes, point_a_classer, K)
+    res = get_class_tab(sorted_dist, nb_classes)
+    m = max(res)
+
+    equ_classes = []
+    for c in range(nb_classes):
+        if res[c] == m:
+            equ_classes.append(c)
+
+    nb_class_equ = len(equ_classes)
+
+    mean_by_class = [float("inf")] * nb_classes
+    for c in range(nb_class_equ):
+        mean_c = 0
+        for i in range(len(sorted_dist)):
+            if sorted_dist[i]['Class'] == equ_classes[c]:
+                mean_c += sorted_dist[i]['Dist']
+        mean_c = mean_c/res[equ_classes[c]]
+        mean_by_class[equ_classes[c]] = mean_c
+
+    best_class = argmin(mean_by_class)
+
+    return (best_class + 1), K, sorted_dist
+
 
 
 # Cette politique consiste à ne pas décider
@@ -202,30 +234,27 @@ donnee_test_classe3 = [4.0484484569058861, 0.24216712711692681]
 liste_donnees_classes = [donnees_classe1, donnees_classe2, donnees_classe3]
 
 
-
 if __name__ == '__main__':
-    K = 3
-    politique = heuristique_increase_k
+    K = 1
+    politique = heuristique_mean
+    display_border = True
 
     print("Decision par K-PPV, avec K = %d" % K)
     decision1, K, voisins = decision_kppv(liste_donnees_classes, donnee_test_classe1, K, politique)
     print("La donnee de classe 1 a ete reconnue comme une donnee de classe %s" % decision1)
-    figure()
-    affichage_kppv(liste_donnees_classes, donnee_test_classe1, K, voisins, decision1)
+    affichage_kppv(liste_donnees_classes, donnee_test_classe1, K, voisins, decision1, display_border=display_border)
 
     decision2, K, voisins = decision_kppv(liste_donnees_classes, donnee_test_classe2, K, politique)
     print("La donnee de classe 2 a ete reconnue comme une donnee de classe %s" % decision2)
-    figure()
-    affichage_kppv(liste_donnees_classes, donnee_test_classe2, K, voisins, decision2)
+    affichage_kppv(liste_donnees_classes, donnee_test_classe2, K, voisins, decision2, display_border=display_border)
 
     decision3, K, voisins = decision_kppv(liste_donnees_classes, donnee_test_classe3, K, politique)
     print("La donnee de classe 3 a ete reconnue comme une donnee de classe %s" % decision3)
-    figure()
-    affichage_kppv(liste_donnees_classes, donnee_test_classe3, K, voisins, decision3)
+    affichage_kppv(liste_donnees_classes, donnee_test_classe3, K, voisins, decision3, display_border=display_border)
 
     print("Cas d'indécision (K=5)")
     donnee_test_indecidable = [1.65, 1.02]
     K = 5
     decision, K, voisins = decision_kppv(liste_donnees_classes, donnee_test_indecidable, K, politique)
     print("La donnee a ete reconnue comme une donnee de classe %s Normalement : indecidable." % decision)
-    affichage_kppv(liste_donnees_classes, donnee_test_indecidable, K, voisins, decision)
+    affichage_kppv(liste_donnees_classes, donnee_test_indecidable, K, voisins, decision, display_border=display_border)
