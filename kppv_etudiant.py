@@ -4,49 +4,69 @@
 # codage de la méthode de classification par k plus proches voisins
 
 from pylab import *
-import random
 from scipy.spatial import distance
 from operator import itemgetter
+from matplotlib.colors import ListedColormap
+from sklearn import neighbors
 
 
-def attente_touche():
-    raw_input()
-
-
-def egalite(liste):
-    m = max(liste)
-    return liste.count(m) > 1
-
-
-def affichage_kppv(liste_donnees_classes, point_a_classer, K, decision):
+def affichage_kppv(liste_donnees_classes, point_a_classer, K, voisins, decision):
     assert type(liste_donnees_classes) is list
+    assert type(voisins) is list
+    assert len(voisins) == K
+    assert K > 0
 
     nb_classes = len(liste_donnees_classes)
     couleurs = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w']
-    formespoints = ['x', 'o', 'v', '^', '<', '>', '1', '2', '3', '4', 's', 'p', '*', 'h', 'H', '+', '.', 'D', 'd', ',']
-    formescentres = ['D', 'D', 'D']
+    formespoints = ['x', 'o', 'v', '^', '<', '>', '1', '2', '3', '4', 's', 'p', 'h', 'H', '+', '.', 'D', 'd', ',']
+    cmap_light = ListedColormap(['#4587EF', '#45EF87', '#ff9999'])
 
     hold(True)
+    x_ptnss = []
+    y_ptnss = []
+    ptnss = []
+    c = []
     for classe in range(nb_classes):
         # Affichage des points de référence
         forme = formespoints[classe]
         couleur = couleurs[classe]
         stylepoint = forme + couleur
         for point in liste_donnees_classes[classe]:
+            x_ptnss.append(point[0])
+            y_ptnss.append(point[1])
+            ptnss.append(point)
+            c.append(classe)
             plot(point[0], point[1], stylepoint)
+            if point in voisins:
+                x = [point_a_classer[0], point[0]]
+                y = [point_a_classer[1], point[1]]
+                plot(x, y, couleur)
 
     # Affichage du point a classer
     stylepoint = 'D' + ('k' if decision == None else couleurs[decision - 1])
     plot(point_a_classer[0], point_a_classer[1], stylepoint)
 
-    # Affichage des segments sur les K points les plus proches
-    k_points = nearest_points(liste_donnees_classes, point_a_classer, K)
-    for i in range(len(k_points)):
-        plot([k_points[i]['Coord'][0], point_a_classer[0]], [k_points[i]['Coord'][1], point_a_classer[1]],
-             couleurs[k_points[i]['Class']])
+    # Calcul et affichage de la frontière de décision
+    x_min, x_max = min(x_ptnss) - 1, max(x_ptnss) + 1
+    y_min, y_max = min(y_ptnss) - 1, max(y_ptnss) + 1
+
+    h = 0.02  # taille de pas dans le maillage
+    xx, yy = meshgrid(arange(x_min, x_max, h), arange(y_min, y_max, h))
+
+    clf = neighbors.KNeighborsClassifier(n_neighbors=K)
+    clf.fit(ptnss, c)
+    Z = clf.predict(c_[xx.ravel(), yy.ravel()])
+
+    Z = Z.reshape(xx.shape)
+    pcolormesh(xx, yy, Z, cmap=cmap_light)
 
     show()
     hold(False)
+
+
+def egalite(liste):
+    m = max(liste)
+    return liste.count(m) > 1
 
 
 # retourne les K points les plus proches du point à classer, leur distance, leur class et leur coordonnées
@@ -84,18 +104,20 @@ def heuristique_increase_k(liste_points_classes, point_a_classer, K):
     nb_classes = len(liste_points_classes)
     eg = True
     res = []
+    sorted_dist = []
     while eg:
         K += 1
         sorted_dist = nearest_points(liste_points_classes, point_a_classer, K)
         res = get_class_tab(sorted_dist, nb_classes)
         eg = egalite(res)
 
-    return (argmax(res) + 1), K
+    return (argmax(res) + 1), K, sorted_dist
 
 
 # Cette politique consiste à ne pas décider
 def heuristique_no_decision(liste_points_classes, point_a_classer, K):
-    return None, K
+    sorted_dist = nearest_points(liste_points_classes, point_a_classer, K)
+    return None, K, sorted_dist
 
 
 def decision_kppv(liste_points_classes, point_a_classer, K, politique):
@@ -117,15 +139,18 @@ def decision_kppv(liste_points_classes, point_a_classer, K, politique):
     # décision sur les classes
     res = get_class_tab(sorted_dist, nb_classes)
 
-    # Si on a égalité on ne prend pas de décision
-    # Si on a égalité on augmenté K jusqu'a avoir une décision
+    # Si on a égalité on prend un décision en fonction de la politique choisie
     new_k = K
     if egalite(res):
-        classe_la_plus_proche, new_k = politique(liste_points_classes, point_a_classer, K)
+        classe_la_plus_proche, new_k, sorted_dist = politique(liste_points_classes, point_a_classer, K)
     else:
         classe_la_plus_proche = argmax(res) + 1
 
-    return classe_la_plus_proche, new_k
+    points = []
+    for i in range(len(sorted_dist)):
+        points.append(sorted_dist[i]['Coord'])
+
+    return classe_la_plus_proche, new_k, points
 
 
 # Programme principal : préparation points représentatifs et
@@ -167,40 +192,30 @@ donnee_test_classe2 = [2.8023018, 1.7921545000000001]
 donnee_test_classe3 = [3.6829643000000001, 0.9706087000000001]
 donnee_test = [1.9, 1.02572714999999997]  # illustration figure sujet
 
-# donnees_classe1 = [[3.6484028273127254, 0.073429844289042881], [2.330634259457685, 0.21748520551489497], [2.644948143301538, 0.20411304520644272], [2.7753121336336251, 0.18681685779827709], [2.1983916903402347, 0.19693911318338075], [2.836900928011457, 0.16884540288894506], [2.6235769902396133, 0.14047193438597244], [2.7157154911382348, 0.18092519035140286], [2.6662657025141492, 0.17384029751490698], [2.7900235283901487, 0.17124467162767718], [2.3025641883523864, 0.19080233853944761], [2.50402381354598, 0.26502653237173324], [2.4698500051963022, 0.23443828139261397], [2.5051902610502612, 0.23067614484914289], [2.4684409160318621, 0.21863502590393655], [3.0295456522668971, 0.086190046340667389], [2.4470385350120138, 0.21074952985853601], [2.5841314160351514, 0.1399509161051439], [2.9340821512886901, 0.13392607949486274]]
-# donnees_classe2 = [[4.0958394694071085, 0.62090992691837554], [3.0515154047252695, 0.53512517722257091], [2.9491682603712408, 0.44028070952077253], [3.2829314223632156, 0.49129132399409814], [3.2997815280896532, 0.46202148420611983], [3.1994813507553297, 0.51730303394481048], [3.2739397765597413, 0.42456810719843918], [3.0094501931685627, 0.53307647477381548], [3.1121716887339406, 0.61264659221630813], [3.1567904507066951, 0.56034384641028545], [3.1666032722891706, 0.47572772737933283], [2.8978523007369641, 0.39472962675440465], [3.3719622811831127, 0.57256856612568585], [3.0025688112273086, 0.5581421242147987], [3.2243758188595679, 0.52064997498366095], [3.0110164875805565, 0.43111214123321362], [3.1485374067025722, 0.64330361652352819], [3.2302342511064359, 0.62838600861174609], [3.4725953755453878, 0.43200027260585433]]
-# donnees_classe3 = [[3.836285556162859, 0.17488885815676444], [3.9046036496933407, 0.21995742377870348], [4.1545108753116367, 0.19645400534459045], [4.1987833316122352, 0.19703304602057539], [3.8715397281540196, 0.18336748445715684], [4.1631952751744903, 0.21583751780035143], [3.8067755719682346, 0.13029984504649231], [4.2331995779590086, 0.16583095278355137], [4.0664834258300173, 0.26180733777608278], [3.8539747179857335, 0.17215241559346361], [4.1093448646782491, 0.17765106796797839], [3.7176133236929481, 0.24048737653006386], [4.3310642505061496, 0.18847876748651521], [3.5832847883882, 0.22498735527596694], [3.999611132714854, 0.12367136651967732], [4.2664222137560586, 0.28957677201563969], [3.9681326235446828, 0.21086457727627866], [3.7197425382728775, 0.24458119801735781], [3.6350175478315383, 0.23427148092916744]]
-
-# liste_donnees_classes = [donnees_classe1,donnees_classe2,donnees_classe3]
-
-# donnee_test_classe1 = [3.0299364237682695, 0.069933489299203899]
-# donnee_test_classe2 = [3.3156657804150163, 0.67327144428452557]
-# donnee_test_classe3 = [4.0484484569058861, 0.24216712711692681]
-
 
 if __name__ == '__main__':
     K = 3
     politique = heuristique_increase_k
 
     print("Decision par K-PPV, avec K = %d" % K)
-    decision1, K = decision_kppv(liste_donnees_classes, donnee_test_classe1, K, politique)
+    decision1, K, voisins = decision_kppv(liste_donnees_classes, donnee_test_classe1, K, politique)
     print("La donnee de classe 1 a ete reconnue comme une donnee de classe %s" % decision1)
     figure()
-    affichage_kppv(liste_donnees_classes, donnee_test_classe1, K, decision1)
+    affichage_kppv(liste_donnees_classes, donnee_test_classe1, K, voisins, decision1)
 
-    decision2, K = decision_kppv(liste_donnees_classes, donnee_test_classe2, K, politique)
+    decision2, K, voisins = decision_kppv(liste_donnees_classes, donnee_test_classe2, K, politique)
     print("La donnee de classe 2 a ete reconnue comme une donnee de classe %s" % decision2)
     figure()
-    affichage_kppv(liste_donnees_classes, donnee_test_classe2, K, decision2)
+    affichage_kppv(liste_donnees_classes, donnee_test_classe2, K, voisins, decision2)
 
-    decision3, K = decision_kppv(liste_donnees_classes, donnee_test_classe3, K, politique)
+    decision3, K, voisins = decision_kppv(liste_donnees_classes, donnee_test_classe3, K, politique)
     print("La donnee de classe 3 a ete reconnue comme une donnee de classe %s" % decision3)
     figure()
-    affichage_kppv(liste_donnees_classes, donnee_test_classe3, K, decision3)
+    affichage_kppv(liste_donnees_classes, donnee_test_classe3, K, voisins, decision3)
 
     print("Cas d'indécision (K=5)")
     donnee_test_indecidable = [1.65, 1.02]
     K = 5
-    decision, K = decision_kppv(liste_donnees_classes, donnee_test_indecidable, K, politique)
+    decision, K, voisins = decision_kppv(liste_donnees_classes, donnee_test_indecidable, K, politique)
     print("La donnee a ete reconnue comme une donnee de classe %s Normalement : indecidable." % decision)
-    affichage_kppv(liste_donnees_classes, donnee_test_indecidable, K, decision)
+    affichage_kppv(liste_donnees_classes, donnee_test_indecidable, K, voisins, decision)
