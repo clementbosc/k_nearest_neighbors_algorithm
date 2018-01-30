@@ -67,12 +67,12 @@ def nearest_points(liste_points_classes, point_a_classer, K):
 
 
 # retourne un tableau contenant nombre d’occurences des classes assocíees aux K plus petites distances
-def get_class_tab(sorted_dist):
+def get_class_tab(sorted_dist, nb_classes):
     # Entrée :
     # - sorted_dist : list de dict (Dist, Class, Coord) des K plus proches points
 
     k = len(sorted_dist)
-    res = [0] * k
+    res = [0] * nb_classes
     for i in range(k):
         res[int(sorted_dist[i]['Class'])] += 1
 
@@ -81,20 +81,21 @@ def get_class_tab(sorted_dist):
 
 # Cette politique consiste à incrémenter K tant que l'on ne peut pas décider
 def heuristique_increase_k(liste_points_classes, point_a_classer, K):
+    nb_classes = len(liste_points_classes)
     eg = True
     res = []
     while eg:
         K += 1
         sorted_dist = nearest_points(liste_points_classes, point_a_classer, K)
-        res = get_class_tab(sorted_dist)
+        res = get_class_tab(sorted_dist, nb_classes)
         eg = egalite(res)
 
-    return argmax(res) + 1
+    return (argmax(res) + 1), K
 
 
 # Cette politique consiste à ne pas décider
 def heuristique_no_decision(liste_points_classes, point_a_classer, K):
-    return None
+    return None, K
 
 
 def decision_kppv(liste_points_classes, point_a_classer, K, politique):
@@ -109,19 +110,22 @@ def decision_kppv(liste_points_classes, point_a_classer, K, politique):
     # Sortie :
     # - numero de la classe la plus proche (0 si pas de décision)
 
+    nb_classes = len(liste_points_classes)
+
     sorted_dist = nearest_points(liste_points_classes, point_a_classer, K)
 
     # décision sur les classes
-    res = get_class_tab(sorted_dist)
+    res = get_class_tab(sorted_dist, nb_classes)
 
     # Si on a égalité on ne prend pas de décision
     # Si on a égalité on augmenté K jusqu'a avoir une décision
+    new_k = K
     if egalite(res):
-        classe_la_plus_proche = politique(liste_points_classes, point_a_classer, K)
+        classe_la_plus_proche, new_k = politique(liste_points_classes, point_a_classer, K)
     else:
         classe_la_plus_proche = argmax(res) + 1
 
-    return classe_la_plus_proche
+    return classe_la_plus_proche, new_k
 
 
 # Programme principal : préparation points représentatifs et
@@ -176,20 +180,20 @@ donnee_test = [1.9, 1.02572714999999997]  # illustration figure sujet
 
 if __name__ == '__main__':
     K = 3
-    politique = heuristique_no_decision
+    politique = heuristique_increase_k
 
     print("Decision par K-PPV, avec K = %d" % K)
-    decision1 = decision_kppv(liste_donnees_classes, donnee_test_classe1, K, politique)
+    decision1, K = decision_kppv(liste_donnees_classes, donnee_test_classe1, K, politique)
     print("La donnee de classe 1 a ete reconnue comme une donnee de classe %s" % decision1)
     figure()
     affichage_kppv(liste_donnees_classes, donnee_test_classe1, K, decision1)
 
-    decision2 = decision_kppv(liste_donnees_classes, donnee_test_classe2, K, politique)
+    decision2, K = decision_kppv(liste_donnees_classes, donnee_test_classe2, K, politique)
     print("La donnee de classe 2 a ete reconnue comme une donnee de classe %s" % decision2)
     figure()
     affichage_kppv(liste_donnees_classes, donnee_test_classe2, K, decision2)
 
-    decision3 = decision_kppv(liste_donnees_classes, donnee_test_classe3, K, politique)
+    decision3, K = decision_kppv(liste_donnees_classes, donnee_test_classe3, K, politique)
     print("La donnee de classe 3 a ete reconnue comme une donnee de classe %s" % decision3)
     figure()
     affichage_kppv(liste_donnees_classes, donnee_test_classe3, K, decision3)
@@ -197,6 +201,6 @@ if __name__ == '__main__':
     print("Cas d'indécision (K=5)")
     donnee_test_indecidable = [1.65, 1.02]
     K = 5
-    decision = decision_kppv(liste_donnees_classes, donnee_test_indecidable, K, politique)
+    decision, K = decision_kppv(liste_donnees_classes, donnee_test_indecidable, K, politique)
     print("La donnee a ete reconnue comme une donnee de classe %s Normalement : indecidable." % decision)
     affichage_kppv(liste_donnees_classes, donnee_test_indecidable, K, decision)
